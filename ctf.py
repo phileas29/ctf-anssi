@@ -5,6 +5,7 @@ import os
 from enum import Enum
 import subprocess
 import pexpect
+import requests
 
 class Section(Enum):
     WELCOME = 0
@@ -66,12 +67,18 @@ def aLEnvers():
     s.shutdown(socket.SHUT_WR)
     s.close()
     
+def header():
+    headers = {'X-FCSC-2022','Can I get a flag, please?'}
+    getdata = requests.get('https://header.france-cybersecurity-challenge.fr/', headers=headers)
+    print(getdata)
+    
 if __name__ == "__main__":
     choice = Section.INTRO
     
     if Section.INTRO :
-        aLEnvers()
+        #aLEnvers()
         #depassementDeTampon()
+        header()
     elif Section.MISC :
         None
         
