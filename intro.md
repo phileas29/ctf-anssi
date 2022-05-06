@@ -17,5 +17,7 @@ https://logic.ly/demo/
 7-segment
 000111110 100111100 110101110 100111100 101110110 111111100 101110110 101110111
 
+shellcode
 buffer overflow
 https://blog.pentesteracademy.com/premium-lab-buffer-overflow-file-read-2674ae0f5925
+https://www.coengoedegebure.com/buffer-overflow-attacks-explained/
