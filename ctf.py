@@ -8,6 +8,12 @@ import pexpect
 import requests
 import time
 import random
+import pwn
+import numpy as np
+import base64
+import math as m
+import pyModbusTCP.client
+
 
 class Section(enum.Enum):
     WELCOME = 0
@@ -75,88 +81,103 @@ def header():
     print(getdata)
 
 def guessMe():
-    mini = -1
-    maxi = 2e20
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("challenges.france-cybersecurity-challenge.fr", 2001))
-    res = 2
+    mini = 0
+    maxi = 1e20
+    analyzer = pexpect.spawn('python3 res/misc/guessme.py', encoding='utf-8')
+    #print(analyzer.before)
+    #print(analyzer.after)
+    #a = int(analyzer.before.split(' ')[1])
+    #b = int(analyzer.before.split(' ')[3])
+    #analyzer.sendline(str(a+b))
+    count = 0
+    data = ""
+    x = ''
+    while count < 16 :
+        test = int( ( mini + maxi ) // 2 )
+        #analyzer.expect('>>> ')
+        analyzer.sendline(str(test))
+        while True:
+            x = str(analyzer.read(2))
+            if x != '\r' or x != '\n' :
+                data += x
+                print(x,end='')
+            if data[-4:] == '>>> ' :
+                break
+        #print(data)
+        exit(0)
+        #print(str(maxi-mini)+",", end='')
+
+        if data.find('+1') != -1 :
+            mini = test
+        elif data.find('-1') != -1 :
+            maxi = test
+        elif data.find('0') != -1 :
+            count += 1
+            print("success")
+            print(test)
+            mini = -1
+            maxi = 2e20
+    
+    exit(0)
+    
+    
+    HOST = "challenges.france-cybersecurity-challenge.fr"
+    PORT = 2001
+    
+    mini = 0
+    maxi = 1e20
+    c = pwn.remote(HOST, PORT)
     count = 0
     while count < 16 :
         test = int( ( mini + maxi ) // 2 )
-        #print("r="+str(res)+",a="+str(mini)+",b="+str(maxi)+",d="+str(maxi-mini)+",t="+str(test))
-        #print("r="+str(res)+",d="+str(maxi-mini)+",t="+str(test)+",c="+str(count))
-        s.send( ( str( test ) + '\n' ).encode("utf-8") )
+        c.recvuntil(b">>> ")
+        c.sendline( str(test).encode("utf-8") )
         time.sleep(0.15)
-        #deadline = time.time() + 20.0
-        #while True :
-            #data = s.recv(2048)
-            #if len(data) != 0 :
-                #break
-            #elif time.time() >= deadline:
-                #break
-        #while 1:
-            #data = s.recv(1024)
-            #if len(data) == 0:
-                #break
-            #print("Received:", repr(data))
-        #data = data.decode("utf-8")
-        
-        try:
-            data = s.recv(4096)
-        except socket.error as e:
-            err = e.args[0]
-            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                sleep(1)
-                print('No data available')
-                continue
-            else:
-                print(e)
-                sys.exit(1)
-        else:
-            #print("Received:", repr(data))
-            data = data.decode("utf-8")
-            
-        #if maxi-mini < 10 :
-            #print("Received : |"+str(data)+"|")
+        data = c.recvline().decode("utf-8")
+        #data = data
+        #print(data[:2], end='')
+        print(str(maxi-mini)+",", end='')
 
-        if data.find('found') != -1 or maxi-mini <= 0 :
-            res = 0
+        if data.find('+1') != -1 :
+            mini = test
+            
+            if maxi-mini <= 0 :
+                mini = -1
+                maxi = 2e20
+        elif data.find('-1') != -1 :
+            maxi = test
+            
+            if maxi-mini <= 0 :
+                mini = -1
+                maxi = 2e20
+        elif data.find('0') != -1 :
             count += 1
             print("############# success !!! #############")
-            if data.find('found') != -1 :
-                print("Received : |"+str(data)+"|")
+            print(data)
             print("c="+str(count))
             print("maxi-mini="+str(maxi-mini))
             print("test="+str(test))
             mini = -1
             maxi = 2e20
-        elif data.find('+1') != -1 :
-            mini = test + 1
-            res = 1
-        elif data.find('-1') != -1 :
-            maxi = test - 1
-            res = -1
+        elif maxi-mini <= 0 :
+            count += 1
+            print("############# success ??? #############")
+            print(data)
+            print("c="+str(count))
+            print("maxi-mini="+str(maxi-mini))
+            print("test="+str(test))
+            mini = -1
+            maxi = 2e20
         else:
             print("???????????????????????????????????????")
             print("Received : |"+str(data)+"|")
-            res = 2
-        if count == 15 :
-            print("Received : |"+str(data)+"|")
-            print("r="+str(res)+",a="+str(mini)+",b="+str(maxi)+",d="+str(maxi-mini)+",t="+str(test))
     if count == 16 :
-        deadline = time.time() + 20.0
-        while True :
-            data = s.recv(2048)
-            if len(data) != 0 :
-                break
-            elif time.time() >= deadline:
-                break
+        data = c.recvline()
         data = data.decode("utf-8")
         print("last attempt")
         print(data)
     print("Connection closed.")
-    s.shutdown(socket.SHUT_WR)
-    s.close()
+    c.close()
     
 class Shuffle(object):
     @classmethod
@@ -317,18 +338,258 @@ class QuiEstCe(object):
         print(cls.__getBinFromBin(yBit))
         print(cls.__getDecFromBin(xBit))
         print(cls.__getDecFromBin(yBit))
+
+class DaddyMorse(object):
+    HOST = "challenges.france-cybersecurity-challenge.fr"
+    PORT_AM = 2251
+    PORT_FM = 2252
+    
+    SAMP_RATE = 24e3
+    MAX_LEN = 256000
+
+    FREQ = { 'l' : 1e3 , 'h' : 5e3 }
+
+    TIMING_DOT = 1/1000
+    TIMING_DASH = 5/1000
+    TIMING_SEP_LETTER = 5/1000
+    TIMING_SPACE = 20/1000
+
+    alphabet = { 'A':'.-', 'B':'-...',
+                'C':'-.-.', 'D':'-..', 'E':'.',
+                'F':'..-.', 'G':'--.', 'H':'....',
+                'I':'..', 'J':'.---', 'K':'-.-',
+                'L':'.-..', 'M':'--', 'N':'-.',
+                'O':'---', 'P':'.--.', 'Q':'--.-',
+                'R':'.-.', 'S':'...', 'T':'-',
+                'U':'..-', 'V':'...-', 'W':'.--',
+                'X':'-..-', 'Y':'-.--', 'Z':'--..',
+                '1':'.----', '2':'..---', '3':'...--',
+                '4':'....-', '5':'.....', '6':'-....',
+                '7':'--...', '8':'---..', '9':'----.',
+                '0':'-----', ', ':'--..--', '.':'.-.-.-',
+                '?':'..--..', '/':'-..-.', '-':'-....-',
+                '(':'-.--.', ')':'-.--.-'}
+
+    rev_alphabet = {k:v for k,v in alphabet.items()}
+    
+    @classmethod
+    def __morseEncode(cls,msg):
+        data = ""
+        for word in msg.split(" "):
+            for i,letter in enumerate(word):
+                if letter in cls.rev_alphabet:
+                    data += cls.rev_alphabet[letter]
+                elif letter == "":
+                    continue
+                else:
+                    return "error"
+                if i != len(word) - 1:
+                    data += "_"
+            data += " "
+        return data
+
+    @classmethod
+    def __getLastPadding(cls,s):
+        i = 0
+        while i < len(s) and s[-1-i] < 0.1 :
+            i += 1
+        return i
+        
+    @classmethod
+    def __getComplex(cls,fType,tn):
+        return np.complex64( \
+            m.cos(2*m.pi*cls.FREQ[fType]*tn) + \
+            m.sin(2*m.pi*cls.FREQ[fType]*tn)*1j )
+        
+    @classmethod
+    def __encodeSampleFM(cls,data,s):
+        signal = []
+        
+        if data == ".":
+            for _ in range(int(cls.TIMING_DOT*cls.SAMP_RATE)):
+                signal.append(cls.__getComplex('h',(len(s)+len(signal))/cls.SAMP_RATE))
+            for _ in range(int(cls.TIMING_DOT*cls.SAMP_RATE)):
+                signal.append(cls.__getComplex('l',(len(s)+len(signal))/cls.SAMP_RATE))
+        elif data == "-":
+            for _ in range(int(cls.TIMING_DASH*cls.SAMP_RATE)):
+                signal.append(cls.__getComplex('h',(len(s)+len(signal))/cls.SAMP_RATE))
+            for _ in range(int(cls.TIMING_DOT*cls.SAMP_RATE)):
+                signal.append(cls.__getComplex('l',(len(s)+len(signal))/cls.SAMP_RATE))
+        elif data == '_' :
+            for _ in range(int((cls.TIMING_SEP_LETTER-cls.TIMING_DOT)*cls.SAMP_RATE)):
+                signal.append(cls.__getComplex('l',(len(s)+len(signal))/cls.SAMP_RATE))
+        elif data == " ":
+            for _ in range(int((cls.TIMING_SPACE-cls.TIMING_DOT)*cls.SAMP_RATE)):
+                signal.append(cls.__getComplex('l',(len(s)+len(signal))/cls.SAMP_RATE))
+            
+        s += signal
+        
+    @classmethod
+    def __encodeSampleAM(cls,data,s):
+        signal = []
+        
+        if data == ".":
+            for _ in range(int(cls.TIMING_DOT*cls.SAMP_RATE)):
+                signal.append(np.complex64(1+1j))
+            for _ in range(int(cls.TIMING_DOT*cls.SAMP_RATE)):
+                signal.append(np.complex64(0+0j))
+        elif data == "-":
+            for _ in range(int(cls.TIMING_DASH*cls.SAMP_RATE)):
+                signal.append(np.complex64(1+1j))
+            for _ in range(int(cls.TIMING_DOT*cls.SAMP_RATE)):
+                signal.append(np.complex64(0+0j))
+        elif data == '_' :
+            for _ in range(int((cls.TIMING_SEP_LETTER-cls.TIMING_DOT)*cls.SAMP_RATE)):
+                signal.append(np.complex64(0+0j))
+        elif data == " ":
+            for _ in range(int((cls.TIMING_SPACE-cls.TIMING_DOT)*cls.SAMP_RATE)):
+                signal.append(np.complex64(0+0j))
+            
+        s += signal
+
+    @classmethod
+    def __fmEncode(cls,data):
+        signal = []
+        
+        for d in data:
+            cls.__encodeSampleFM(d,signal)
+        
+        return signal
+
+    @classmethod
+    def __amEncode(cls,data):
+        signal = []
+        
+        for d in data:
+            cls.__encodeSampleAM(d,signal)
+        
+        return signal
+    
+    @classmethod
+    def __stringToComplex(cls,x):
+        
+        return y
+    
+    @classmethod
+    def daddyMorse(cls,mode='am'):
+        if mode == 'am' :
+            c = pwn.remote(cls.HOST, cls.PORT_AM)
+        elif mode == 'fm' :
+            c = pwn.remote(cls.HOST, cls.PORT_FM)
+        np.set_printoptions(threshold=np.inf)
+        message = "CAN I GET THE FLAG"
+        #message = "HELLO"
+        data = cls.__morseEncode(message)
+        #print(data)
+        if mode == 'am' :
+            signal = np.asarray(cls.__amEncode(data))
+        elif mode == 'fm' :
+            signal = np.asarray(cls.__fmEncode(data))
+        np.save('signal_fm_001.iq', signal)
+        #print(len(signal))
+        #print(signal)
+        encodedSignal = base64.b64encode(signal.tobytes())
+        #print(encodedSignal[:50])
+        
+        c.recvuntil(b"> ")
+        c.sendline(encodedSignal)
+        print(c.recvline())
+        
+        c.close()
+        
+class ColorPlant(object):
+    HOST = "challenges.france-cybersecurity-challenge.fr"
+    PORT = 502
+    
+    @classmethod
+    def colorPlant(cls):
+        c = pyModbusTCP.client.ModbusClient()
+        c.host(cls.HOST)
+        c.port(cls.PORT)
+        c.open()
+        regs = c.read_holding_registers(0, 32)
+        print(regs)
+        for e in regs:
+            print(chr(e),end='')
+        print()
+        time.sleep(8)
+        
+        print("debit max")
+        for i in range(4):
+            c.write_single_register(32+i, 5)
+        #rouge + 1/2 vert
+        print("transfert R + % V")
+        if c.read_coils(0, 1)[0] == False :
+            c.write_single_coil(0, True)
+        if c.read_coils(1, 1)[0] == False :
+            c.write_single_coil(1, True)
+        while True :
+            if 25 <= c.read_input_registers(3, 1)[0] and c.read_holding_registers(32, 1)[0] == 5 :
+                c.write_single_register(32,1)
+            if 60 <= c.read_input_registers(4, 1)[0] and c.read_holding_registers(33, 1)[0] == 5 :
+                c.write_single_register(33,1)
+            if 32 <= c.read_input_registers(3, 1)[0] :
+                if c.read_coils(0, 1)[0] == True :
+                    c.write_single_coil(0, False)
+            if 68 <= c.read_input_registers(4, 1)[0] :
+                if c.read_coils(1, 1)[0] == True :
+                    c.write_single_coil(1, False)
+            if c.read_coils(0, 1)[0] == False and c.read_coils(1, 1)[0] == False :
+                break
+            time.sleep(0.1)
+        if c.read_coils(3, 1)[0] == False :
+            c.write_single_coil(3, True)
+        while c.read_input_registers(3, 1)[0] != 0 or c.read_input_registers(4, 1)[0] != 0 :
+            time.sleep(0.1)
+        if c.read_coils(3, 1)[0] == True :
+            c.write_single_coil(3, False)
+            
+        print("debit max")
+        for i in range(4):
+            c.write_single_register(32+i, 5)
+        #bleu + 1/2 vert
+        print("transfert B + % V")
+        if c.read_coils(1, 1)[0] == False :
+            c.write_single_coil(1, True)
+        if c.read_coils(2, 1)[0] == False :
+            c.write_single_coil(2, True)
+        while True :
+            if 50 <= c.read_input_registers(4, 1)[0] and c.read_holding_registers(33, 1)[0] == 5 :
+                c.write_single_register(33,1)
+            if 35 <= c.read_input_registers(5, 1)[0] and c.read_holding_registers(34, 1)[0] == 5 :
+                c.write_single_register(34,1)
+            if 58 <= c.read_input_registers(4, 1)[0] :
+                if c.read_coils(1, 1)[0] == True :
+                    c.write_single_coil(1, False)
+            if 42 <= c.read_input_registers(5, 1)[0] :
+                if c.read_coils(2, 1)[0] == True :
+                    c.write_single_coil(2, False)
+            if c.read_coils(1, 1)[0] == False and c.read_coils(2, 1)[0] == False :
+                break
+            time.sleep(0.1)
+        if c.read_coils(3, 1)[0] == False :
+            c.write_single_coil(3, True)
+        while c.read_input_registers(4, 1)[0] != 0 or c.read_input_registers(5, 1)[0] != 0 :
+            time.sleep(0.1)
+        if c.read_coils(3, 1)[0] == True :
+            c.write_single_coil(3, False)
+
+        c.close()
+
     
 if __name__ == "__main__":
-    choice = Section.CRYPTO
+    choice = Section.MISC
     
     if choice == Section.INTRO :
         #aLEnvers()
         #depassementDeTampon()
         header()
     elif choice == Section.MISC :
-        guessMe()
+        #guessMe()
+        ColorPlant.colorPlant()
     elif choice == Section.HARDWARE :
-        QuiEstCe.quiEstCeSimu()
+        #QuiEstCe.quiEstCeSimu()
+        DaddyMorse.daddyMorse('fm')
     elif choice == Section.CRYPTO :
         Shuffle.shuffle()
         
